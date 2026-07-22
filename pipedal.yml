@@ -1,0 +1,54 @@
+console:
+  window:
+    width: 1280
+    height: 720
+    fullscreen: false
+    resizable: false
+    decorated: false
+  commands:
+    restart_service:
+      - /usr/bin/sudo /usr/bin/systemctl restart pipedald.service
+    restart_console:
+      - /usr/bin/pkill labwc
+    poweroff:
+      - /usr/bin/sudo /usr/sbin/poweroff
+    reboot:
+      - /usr/bin/sudo /usr/sbin/reboot
+  alsa:
+    device: Zero
+    input:
+      - mixername: Mixin PGA
+        displayname: MIXIN
+        mute_enable: true
+      - mixername: ADC
+        mute_enable: true
+      - mixername: Aux
+        displayname: IN
+        channels: 2
+        mute_enable: true
+    output:
+      - mixername: Headphone
+        displayname: OUT
+        channels: 2
+        mute_enable: true
+      - mixername: DAC
+        mute_enable: true
+  buttons:
+    - label: PiPedal
+      commands:
+        - /usr/bin/chromium --app=http://localhost
+      fork: true
+      geometry:
+        column: 0
+        row: 0
+        width: 1
+        height: 2
+    - label: Shell
+      commands:
+        - /usr/bin/lxterminal --geometry=125x35
+      fork: true
+      geometry:
+        column: 1
+        row: 0
+        width: 1
+        height: 2
