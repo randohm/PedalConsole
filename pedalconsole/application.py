@@ -1,5 +1,5 @@
 import re
-import sys, time, platform
+import sys, time
 import logging
 import psutil
 import threading
@@ -10,7 +10,7 @@ from gi.repository import Gtk, GLib
 
 log = logging.getLogger(__name__)
 
-class StatsUpdater():
+class StatsUpdater:
     def __init__(self, window, config):
         self.window = window
         self.config = config
@@ -73,14 +73,16 @@ class PedalConsoleApp(Gtk.Application):
         self.config = config
         self.css_file = css_file
         self.audiodevice = alsa.AudioDevice(device_name=config['alsa']['device'])
+        self.window = None
+        self.statsupdater = None
 
         self.connect('activate', self.on_activate)
         self.connect('shutdown', self.on_quit)
 
-    def on_quit(self, app):
+    def on_quit(self, app:Gtk.Application):
         self.quit()
 
-    def on_activate(self, app):
+    def on_activate(self, app:Gtk.Application):
         self.window = ui.PedalConsoleWindow(application=self, config=self.config, css_file=self.css_file,
                                             audiodevice=self.audiodevice)
         try:

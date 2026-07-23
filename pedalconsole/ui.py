@@ -3,9 +3,6 @@ import subprocess
 import logging
 from . import constants, application
 import gi
-
-from .alsa import AudioDevice
-
 gi.require_version("Gtk", "4.0")
 from gi.repository import Gtk, GLib, Gdk, GObject
 
@@ -48,7 +45,7 @@ class MuteButton(Gtk.Button):
 
 
 class RestartDialog(Gtk.AlertDialog):
-    def __init__(self, parent=None, *args, **kwargs):
+    def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.set_modal(True)
         self.set_message(constants.DIALOG_MESSAGE_FMT % "Restart app and services?")
@@ -57,7 +54,7 @@ class RestartDialog(Gtk.AlertDialog):
 
 
 class PowerDialog(Gtk.AlertDialog):
-    def __init__(self, parent=None, *args, **kwargs):
+    def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.set_modal(True)
         self.set_message(constants.DIALOG_MESSAGE_FMT % "Reboot or Power off?")
@@ -66,7 +63,7 @@ class PowerDialog(Gtk.AlertDialog):
 
 
 class StatLabel(Gtk.Label):
-    def __init__(self, stat, value, *args, **kwargs):
+    def __init__(self, stat:str, value:str, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.set_name("stat-label")
         self.set_justify(Gtk.Justification.CENTER)
@@ -78,7 +75,7 @@ class StatLabel(Gtk.Label):
 
 
 class MixerSlider(Gtk.Scale):
-    def __init__(self, config, audiodevice, mixerdevice, channel, on_value_changed, *args, **kwargs):
+    def __init__(self, config:dict, audiodevice, mixerdevice, channel:int|None, on_value_changed:Callable, *args, **kwargs):
         adjustment = Gtk.Adjustment(value=0, step_increment=1, lower=0, upper=100)
         super().__init__(orientation=Gtk.Orientation.VERTICAL, adjustment=adjustment, *args, **kwargs)
         self.config = config
@@ -129,7 +126,7 @@ class MixerControl(Gtk.Box):
             self.mute_button = MuteButton(audiodevice=self.audiodevice, mixerdevice=self.mixerdevice, on_click=self.on_mute_button_clicked)
             self.append(self.mute_button)
 
-    def setup_slider(self, channel):
+    def setup_slider(self, channel:int|None):
         if channel is None:
             column = 0
         else:
@@ -162,7 +159,7 @@ class MixerControl(Gtk.Box):
 
 
 class MixerSideBox(Gtk.Box):
-    def __init__(self, config, label_markup, audiodevice, *args, **kwargs):
+    def __init__(self, config:dict, label_markup:str, audiodevice, *args, **kwargs):
         super().__init__(orientation=Gtk.Orientation.VERTICAL, *args, **kwargs)
         log.debug("Mixer side box config: %s" % config)
         self.config = config
@@ -193,12 +190,13 @@ class CommandButton(Gtk.Button):
         self.set_name("command-button")
         self.config = config
         self.set_label(config['label'])
+        self.popen_process = None
         if 'warning' in config and config['warning']:
             self.connect("clicked", self.show_warning)
         else:
             self.connect("clicked", self.exec_commands)
 
-    def exec_commands(self, button):
+    def exec_commands(self, button:Gtk.Button):
         log.debug("Commands: %s" % self.config['commands'])
         if self.config['fork']:
             if hasattr(self, "popen_process") and self.popen_process and self.popen_process.poll() is None:
@@ -212,7 +210,7 @@ class CommandButton(Gtk.Button):
                 if constants.EXEC_CMDS:
                     subprocess.run(cmd, shell=True)
 
-    def show_warning(self, button):
+    def show_warning(self, button:Gtk.Button):
         if 'warning' not in self.config:
             raise ValueError("Missing 'warning' in config")
         dialog = Gtk.AlertDialog()
@@ -271,34 +269,10 @@ class PedalConsoleWindow(Gtk.ApplicationWindow):
         self.input_box = MixerSideBox(config=self.config['alsa']['input'], audiodevice=self.audiodevice, label_markup=constants.LABEL_INPUT)
 
         self.main_box.append(self.output_box)
-        self.setup_center_box()
-        self.main_box.append(self.input_box)
-
-    def on_keypress(self, controller, keyval, keycode, state):
-        #log.debug("keypressed: %s %s %s" % (keyval, keycode, state))
-        ctrl_pressed = state & Gdk.ModifierType.CONTROL_MASK
-        cmd_pressed = state & Gdk.ModifierType.META_MASK
-        if keyval in (ord('q'), ord('Q')) and (ctrl_pressed or cmd_pressed):
-            log.debug("QUIT pressed")
-            self.close()
-
-    def setup_center_box(self):
         self.center_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         self.center_box.set_name("center-box")
         self.main_box.append(self.center_box)
 
-        self.setup_top_button_grid()
-
-        ## Middle spacer
-        #self.center_box.append(Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL))
-        spacer_box = Gtk.Box()
-        spacer_box.set_vexpand(True)
-        self.center_box.append(spacer_box)
-
-        self.setup_stats_grid()
-        self.setup_stock_buttons()
-
-    def setup_top_button_grid(self):
         self.top_button_grid = Gtk.Grid()
         self.top_button_grid.set_column_homogeneous(True)
         self.top_button_grid.set_row_homogeneous(True)
@@ -312,39 +286,23 @@ class PedalConsoleWindow(Gtk.ApplicationWindow):
             self.top_button_grid.attach(b, button_config['geometry']['column'], button_config['geometry']['row'],
                                     button_config['geometry']['width'], button_config['geometry']['height'])
 
-    def setup_stock_buttons(self):
-        self.stock_button_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
-        self.center_box.append(self.stock_button_box)
-        self.stock_button_box.set_name("stock-button-box")
-        self.stock_button_box.set_homogeneous(True)
+        ## Middle spacer
+        #self.center_box.append(Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL))
+        spacer_box = Gtk.Box()
+        spacer_box.set_vexpand(True)
+        self.center_box.append(spacer_box)
 
-        self.restart_button = Gtk.Button(label=constants.BUTTON_LABEL_RESTART)
-        self.restart_button.set_name("stock-button")
-        self.restart_button.set_hexpand(True)
-        #self.restart_button.set_vexpand(False)
-        self.restart_button.connect("clicked", self.restart_button_clicked)
-        self.stock_button_box.append(self.restart_button)
-
-        self.power_button = Gtk.Button(label=constants.BUTTON_LABEL_POWER)
-        self.power_button.set_name("stock-button")
-        self.power_button.set_hexpand(True)
-        #self.power_button.set_vexpand(False)
-        self.power_button.connect("clicked", self.power_button_clicked)
-        self.stock_button_box.append(self.power_button)
-
-    def setup_stats_grid(self):
+        ## Stats grid
         self.stats_grid = Gtk.Grid()
         self.stats_grid.set_column_homogeneous(True)
         self.stats_grid.set_row_homogeneous(True)
         self.center_box.append(self.stats_grid)
-
         self.cpu_label = StatLabel("CPU", "")
         self.mem_label = StatLabel("Mem", "")
         self.temp_label = StatLabel("Temp", "")
         self.samplerate_label = StatLabel("Rate", "")
         self.bits_label = StatLabel("Bits", "")
         self.buffer_label = StatLabel("Buffer", "")
-
         self.stats_grid.attach(self.cpu_label, 0, 0, 1, 1)
         self.stats_grid.attach(self.mem_label, 1, 0, 1, 1)
         self.stats_grid.attach(self.temp_label, 2, 0, 1, 1)
@@ -352,10 +310,38 @@ class PedalConsoleWindow(Gtk.ApplicationWindow):
         self.stats_grid.attach(self.bits_label, 1, 1, 1, 1)
         self.stats_grid.attach(self.buffer_label, 2, 1, 1, 1)
 
-    def power_button_clicked(self, button):
-        PowerDialog().choose(parent=self, callback=self.power_dialog_response)
+        ## Stock buttons
+        self.stock_button_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
+        self.center_box.append(self.stock_button_box)
+        self.stock_button_box.set_name("stock-button-box")
+        self.stock_button_box.set_homogeneous(True)
+        self.restart_button = Gtk.Button(label=constants.BUTTON_LABEL_RESTART)
+        self.restart_button.set_name("stock-button")
+        self.restart_button.set_hexpand(True)
+        #self.restart_button.set_vexpand(False)
+        self.restart_button.connect("clicked", self.restart_button_clicked)
+        self.stock_button_box.append(self.restart_button)
+        self.power_button = Gtk.Button(label=constants.BUTTON_LABEL_POWER)
+        self.power_button.set_name("stock-button")
+        self.power_button.set_hexpand(True)
+        #self.power_button.set_vexpand(False)
+        self.power_button.connect("clicked", self.power_button_clicked)
+        self.stock_button_box.append(self.power_button)
 
-    def power_dialog_response(self, dialog, async_result):
+        self.main_box.append(self.input_box)
+
+    def on_keypress(self, controller, keyval, keycode, state):
+        #log.debug("keypressed: %s %s %s" % (keyval, keycode, state))
+        ctrl_pressed = state & Gdk.ModifierType.CONTROL_MASK
+        cmd_pressed = state & Gdk.ModifierType.META_MASK
+        if keyval in (ord('q'), ord('Q')) and (ctrl_pressed or cmd_pressed):
+            log.debug("QUIT pressed")
+            self.close()
+
+    def power_button_clicked(self, button:Gtk.Button):
+        PowerDialog().choose(callback=self.power_dialog_response)
+
+    def power_dialog_response(self, dialog:Gtk.AlertDialog, async_result):
         try:
             res = dialog.choose_finish(async_result)
             log.debug("Power response %s" % res)
@@ -372,10 +358,10 @@ class PedalConsoleWindow(Gtk.ApplicationWindow):
         except Exception as e:
             log.debug("Power op failed %s" % e)
 
-    def restart_button_clicked(self, button):
-        RestartDialog().choose(parent=self, callback=self.restart_dialog_response)
+    def restart_button_clicked(self, button:Gtk.Button):
+        RestartDialog().choose(callback=self.restart_dialog_response)
 
-    def restart_dialog_response(self, dialog, async_result):
+    def restart_dialog_response(self, dialog:Gtk.AlertDialog, async_result):
         try:
             res = dialog.choose_finish(async_result)
             log.debug("Restart response %s" % res)
