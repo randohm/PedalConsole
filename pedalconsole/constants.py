@@ -4,7 +4,7 @@ LABEL_INPUT="<big><b>I N</b></big>"
 LABEL_OUTPUT="<big><b>O U T</b></big>"
 STATLABEL_FMT="<big>%s</big>\n<small><b>%s</b></small>"
 STATS_UPDATE_INTERVAL=1
-EXEC_CMDS=False
+EXEC_CMDS=True
 
 DIALOG_MESSAGE_FMT="\n\n        %s        \n"
 DIALOG_DETAIL_FMT="\n\n%s\n\n\n"

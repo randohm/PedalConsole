@@ -302,8 +302,6 @@ class PedalConsoleWindow(Gtk.ApplicationWindow):
         self.top_button_grid = Gtk.Grid()
         self.top_button_grid.set_column_homogeneous(True)
         self.top_button_grid.set_row_homogeneous(True)
-        #self.top_button_grid.set_hexpand(True)
-        #self.top_button_grid.set_vexpand(True)
         self.center_box.append(self.top_button_grid)
 
         log.debug("buttons: %s" % self.config['buttons'])
@@ -345,14 +343,14 @@ class PedalConsoleWindow(Gtk.ApplicationWindow):
         self.temp_label = StatLabel("Temp", "")
         self.samplerate_label = StatLabel("Rate", "")
         self.bits_label = StatLabel("Bits", "")
-        self.blank_label = StatLabel("", "")
+        self.buffer_label = StatLabel("Buffer", "")
 
         self.stats_grid.attach(self.cpu_label, 0, 0, 1, 1)
         self.stats_grid.attach(self.mem_label, 1, 0, 1, 1)
         self.stats_grid.attach(self.temp_label, 2, 0, 1, 1)
         self.stats_grid.attach(self.samplerate_label, 0, 1, 1, 1)
         self.stats_grid.attach(self.bits_label, 1, 1, 1, 1)
-        self.stats_grid.attach(self.blank_label, 2, 1, 1, 1)
+        self.stats_grid.attach(self.buffer_label, 2, 1, 1, 1)
 
     def power_button_clicked(self, button):
         PowerDialog().choose(parent=self, callback=self.power_dialog_response)

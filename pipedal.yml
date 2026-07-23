@@ -17,9 +17,6 @@ console:
   alsa:
     device: Zero
     input:
-      - mixername: Mixin PGA
-        displayname: MIXIN
-        mute_enable: true
       - mixername: ADC
         mute_enable: true
       - mixername: Aux

@@ -54,10 +54,13 @@ class StatsUpdater():
                                     rate = re.search(r"^rate: ([0-9]+)", l).group(1)
                                 elif re.match(r"format:", l):
                                     bits = re.search(r"format: [^0-9]*([0-9]+)[^0-9]*", l).group(1)
+                                elif re.match(r"buffer_size:", l):
+                                    buffer = re.search(r"buffer_size: ([0-9]+)", l).group(1)
                             #log.debug("Rate: %s" % rate)
                             #log.debug("Bits: %s" % bits)
                             GLib.idle_add(self.window.samplerate_label.set_value, rate)
                             GLib.idle_add(self.window.bits_label.set_value, bits)
+                            GLib.idle_add(self.window.buffer_label.set_value, buffer)
                 except Exception as e:
                     log.error("Failed to open alsa proc file: %s" % e)
             time.sleep(constants.STATS_UPDATE_INTERVAL)

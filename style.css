@@ -81,22 +81,19 @@ window {
     border-color: black;
     border-radius: 0px;
     color: black;
-    #background: mediumseagreen;
 }
 
 .muted {
     background: red;
-    font-size: 14pt;
 }
 
 .unmuted {
     background: mediumseagreen;
-    font-size: 16pt;
 }
 
 #command-button {
     padding: 10px;
-    margin: 15px 5px 5px 5px;
+    margin: 10px;
     border-style: solid;
     border-width: 1px;
     border-color: gray;
@@ -114,7 +111,7 @@ window {
 
 #stock-button {
     padding: 10px;
-    margin: 5px;
+    margin: 10px;
     border-style: solid;
     border-width: 1px;
     border-color: gray;
