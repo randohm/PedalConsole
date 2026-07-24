@@ -27,24 +27,24 @@ class StatsUpdater:
         while True:
             cpu_usage = psutil.cpu_percent(interval=constants.STATS_UPDATE_INTERVAL)
             #log.debug("CPU usage: %s" % cpu_usage)
-            GLib.idle_add(self.window.cpu_label.set_value, "%-03.1f%%" % cpu_usage)
+            GLib.idle_add(self.window.stats_grid.cpu_label.set_value, "%-03.1f%%" % cpu_usage)
 
             mem_usage = psutil.virtual_memory().percent
             #log.debug("MEM usage: %s" % mem_usage)
-            GLib.idle_add(self.window.mem_label.set_value, "%-03.1f%%" % mem_usage)
+            GLib.idle_add(self.window.stats_grid.mem_label.set_value, "%-03.1f%%" % mem_usage)
 
             if psutil.LINUX:
                 temps = psutil.sensors_temperatures()
                 #log.debug("Temps: %s" % temps['cpu_thermal'][0].current)
-                GLib.idle_add(self.window.temp_label.set_value, "%3.1fC" % temps['cpu_thermal'][0].current)
+                GLib.idle_add(self.window.stats_grid.temp_label.set_value, "%3.1fC" % temps['cpu_thermal'][0].current)
 
                 try:
                     with open(constants.ALSA_PROC_FILE_FMT % self.config['alsa']['device'], "r") as f:
                         lines = f.read().splitlines()
                         #log.debug("ALSA proc file: %s" % lines)
                         if lines[0] == "closed\n":
-                            GLib.idle_add(self.window.samplerate_label.set_value, "0")
-                            GLib.idle_add(self.window.bits_label.set_value, "0")
+                            GLib.idle_add(self.window.stats_grid.samplerate_label.set_value, "0")
+                            GLib.idle_add(self.window.stats_grid.bits_label.set_value, "0")
                         else:
                             rate = None
                             bits = None
@@ -58,9 +58,9 @@ class StatsUpdater:
                                     buffer = re.search(r"buffer_size: ([0-9]+)", l).group(1)
                             #log.debug("Rate: %s" % rate)
                             #log.debug("Bits: %s" % bits)
-                            GLib.idle_add(self.window.samplerate_label.set_value, rate)
-                            GLib.idle_add(self.window.bits_label.set_value, bits)
-                            GLib.idle_add(self.window.buffer_label.set_value, buffer)
+                            GLib.idle_add(self.window.stats_grid.samplerate_label.set_value, rate)
+                            GLib.idle_add(self.window.stats_grid.bits_label.set_value, bits)
+                            GLib.idle_add(self.window.stats_grid.buffer_label.set_value, buffer)
                 except Exception as e:
                     log.error("Failed to open alsa proc file: %s" % e)
             time.sleep(constants.STATS_UPDATE_INTERVAL)
@@ -91,3 +91,4 @@ class PedalConsoleApp(Gtk.Application):
             log.fatal("Failed to start statsupdater: %s" % e)
             sys.exit(1)
         self.window.present()
+        #ui.MixerWindow(self.config).present()

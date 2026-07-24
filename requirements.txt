@@ -1,3 +1,4 @@
 pygobject
 pyyaml
 psutil
+collections

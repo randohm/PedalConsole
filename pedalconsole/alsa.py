@@ -5,6 +5,7 @@ log = logging.getLogger(__name__)
 
 class AudioDevice:
     def __init__(self, device_name:str, *args, **kwargs):
+        self.device_name = device_name
         cards = alsaaudio.cards()
         log.debug("Audio cards: %s" % cards)
         self.card_index = None

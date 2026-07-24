@@ -1,16 +1,75 @@
 import os
 import subprocess
 import logging
-from . import constants, application
+from . import constants, application, alsa
+import alsaaudio
+from collections.abc import Callable
 import gi
 gi.require_version("Gtk", "4.0")
-from gi.repository import Gtk, GLib, Gdk, GObject
+from gi.repository import Gtk, Gdk
 
 log = logging.getLogger(__name__)
 
 
+class MixerWindow(Gtk.Window):
+    def __init__(self, config:dict, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.parent = kwargs['parent']
+        self.config = config
+        self.mixerdevices = []
+        self.set_name("mixer-window")
+        self.set_decorated(False)
+        self.set_resizable(False)
+        self.set_modal(True)
+        self.set_default_size(config['window']['width'], config['window']['height'])
+
+        self.main_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        self.main_box.set_hexpand(True)
+        self.main_box.set_vexpand(True)
+        self.set_child(self.main_box)
+        self.close_button = Gtk.Button.new_with_label("Close")
+        self.close_button.set_hexpand(True)
+        self.main_box.append(self.close_button)
+        self.close_button.connect('clicked', self.on_close_click)
+
+        self.scrolled_window = Gtk.ScrolledWindow()
+        self.scrolled_window.set_hexpand(True)
+        self.scrolled_window.set_vexpand(True)
+        self.scrolled_window.set_kinetic_scrolling(True)
+        self.scrolled_window.set_policy(Gtk.PolicyType.ALWAYS, Gtk.PolicyType.NEVER)
+        self.main_box.append(self.scrolled_window)
+
+        self.mixer_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
+        self.scrolled_window.set_child(self.mixer_box)
+        self.audiodevice = alsa.AudioDevice(device_name=config['alsa']['device'])
+        for m in self.audiodevice.mixers:
+            #log.debug("adding mixer '%s'" % m)
+            mixerdevice = self.audiodevice.get_mixer(m)
+            self.mixerdevices.append(mixerdevice)
+            mixercontrol = MixerControl(audiodevice=self.audiodevice, mixername=m, channels=None)
+            self.mixer_box.append(mixercontrol)
+            #break
+
+        self.key_event_controller = Gtk.EventControllerKey.new()
+        self.key_event_controller.connect('key-pressed', self.on_keypress)
+        self.add_controller(self.key_event_controller)
+
+
+    def on_keypress(self, controller:Gtk.EventControllerKey, keyval:int, keycode:int, state:Gdk.ModifierType):
+        #log.debug("keypressed: %s %s %s" % (keyval, keycode, state))
+        ctrl_pressed = state & Gdk.ModifierType.CONTROL_MASK
+        cmd_pressed = state & Gdk.ModifierType.META_MASK
+        if keyval in (ord('w'), ord('W')) and (ctrl_pressed or cmd_pressed):
+            log.debug("MixerWindow closing")
+            self.close()
+
+    def on_close_click(self, button:Gtk.Button):
+        log.debug("MixerWindow closing")
+        self.close()
+
+
 class MuteButton(Gtk.Button):
-    def __init__(self, audiodevice, mixerdevice, on_click, *args, **kwargs):
+    def __init__(self, audiodevice:alsa.AudioDevice, mixerdevice:alsaaudio.Mixer, on_click:Callable, *args, **kwargs):
         super().__init__(*args, **kwargs)
         if mixerdevice.getmute()[0]:
             self.mute = True
@@ -75,10 +134,9 @@ class StatLabel(Gtk.Label):
 
 
 class MixerSlider(Gtk.Scale):
-    def __init__(self, config:dict, audiodevice, mixerdevice, channel:int|None, on_value_changed:Callable, *args, **kwargs):
+    def __init__(self, audiodevice:alsa.AudioDevice, mixerdevice:alsaaudio.Mixer, channel:int|None, on_value_changed:Callable, *args, **kwargs):
         adjustment = Gtk.Adjustment(value=0, step_increment=1, lower=0, upper=100)
         super().__init__(orientation=Gtk.Orientation.VERTICAL, adjustment=adjustment, *args, **kwargs)
-        self.config = config
         self.audiodevice = audiodevice
         self.mixerdevice = mixerdevice
         self.channel = channel
@@ -94,35 +152,43 @@ class MixerSlider(Gtk.Scale):
 
 
 class MixerControl(Gtk.Box):
-    def __init__(self, config, audiodevice, *args, **kwargs):
+    def __init__(self, audiodevice:alsa.AudioDevice, mixername:str, channels:int|None, displayname:str|None=None, *args, **kwargs):
         super().__init__(orientation=Gtk.Orientation.VERTICAL, *args, **kwargs)
-        log.debug("config: %s" % config)
-        self.config = config
+        log.debug("Creating mixercontrol for '%s' '%s'" % (audiodevice.device_name, mixername))
         self.audiodevice = audiodevice
-        self.mixerdevice = audiodevice.get_mixer(config['mixername'])
+        self.mixername = mixername
+        self.channels = channels
+        self.displayname = displayname if displayname is not None else mixername
+        self.mixerdevice = audiodevice.get_mixer(mixername)
         self.set_name("mixer-control")
         self.set_vexpand(True)
         self.set_halign(Gtk.Align.CENTER)
         self.name_label = Gtk.Label()
         self.name_label.set_name("mixer-name-label")
-        self.name_label.set_markup("<b>%s</b>" % self.config['displayname'] if 'displayname' in self.config else self.config['mixername'])
+        self.name_label.set_markup("<b>%s</b>" % self.displayname)
         self.name_label.set_justify(Gtk.Justification.CENTER)
+        self.name_label.set_wrap(True)
         self.append(self.name_label)
 
-        self.sliders_grid = Gtk.Grid()
-        self.sliders_grid.set_name("mixer-sliders-grid")
-        self.sliders_grid.set_halign(Gtk.Align.CENTER)
-        self.append(self.sliders_grid)
 
-        self.sliders = []
-        self.level_labels = []
-        if 'channels' not in config:
-            self.setup_slider(channel=None)
+        if len(self.mixerdevice.volumecap()) > 0:
+            self.sliders_grid = Gtk.Grid()
+            self.sliders_grid.set_name("mixer-sliders-grid")
+            self.sliders_grid.set_halign(Gtk.Align.CENTER)
+            self.append(self.sliders_grid)
+            self.sliders = []
+            self.level_labels = []
+            if channels is None:
+                self.setup_slider(channel=channels)
+            else:
+                for c in range(channels):
+                    self.setup_slider(channel=c)
         else:
-            for c in range(config['channels']):
-                self.setup_slider(channel=c)
+            spacer_box = Gtk.Box()
+            spacer_box.set_vexpand(True)
+            self.append(spacer_box)
 
-        if 'mute_enable' in self.config and self.config['mute_enable'] and len(self.mixerdevice.switchcap()) > 0:
+        if len(self.mixerdevice.switchcap()) > 0:
             self.mute_button = MuteButton(audiodevice=self.audiodevice, mixerdevice=self.mixerdevice, on_click=self.on_mute_button_clicked)
             self.append(self.mute_button)
 
@@ -136,19 +202,19 @@ class MixerControl(Gtk.Box):
         label.set_name("volume-label")
         self.level_labels.append(label)
         self.sliders_grid.attach(label, column, 0, 1, 1)
-        slider = MixerSlider(config=self.config, audiodevice=self.audiodevice, mixerdevice=self.mixerdevice, channel=channel, on_value_changed=self.on_slider_changed)
+        slider = MixerSlider(audiodevice=self.audiodevice, mixerdevice=self.mixerdevice, channel=channel, on_value_changed=self.on_slider_changed)
         slider.set_name("mixer-slider")
         self.sliders.append(slider)
         self.sliders_grid.attach(slider, column, 1, 1, 1)
 
 
-    def on_mute_button_clicked(self, button):
-        log.debug("Mute button clicked for mixer '%s'" % self.config['mixername'])
+    def on_mute_button_clicked(self, button:Gtk.Button):
+        log.debug("Mute button clicked for mixer '%s'" % self.mixername)
         button.toggle_mute()
 
-    def on_slider_changed(self, scale):
+    def on_slider_changed(self, scale:Gtk.Scale):
         value = scale.get_value()
-        log.debug("slider value_changed for '%s' channel '%s': %f" % (scale.config['mixername'], scale.channel, value))
+        log.debug("slider value_changed for '%s' channel '%s': %f" % (scale.mixerdevice.mixer(), scale.channel, value))
         self.audiodevice.set_volume_percent(mixer=self.mixerdevice, volume=int(value), channel=scale.channel)
         vol_db = self.audiodevice.get_volume_db(mixer=self.mixerdevice)[scale.channel if scale.channel is not None else 0]
         log.debug("vol_db: %s" % vol_db)
@@ -180,7 +246,13 @@ class MixerSideBox(Gtk.Box):
 
         for m in config:
             log.debug("MixerControl config: %s" % m)
-            mc = MixerControl(config=m, audiodevice=self.audiodevice)
+            channels = None
+            if 'channels' in m:
+                channels = m['channels']
+            displayname = None
+            if 'displayname' in m:
+                displayname = m['displayname']
+            mc = MixerControl(audiodevice=self.audiodevice, mixername=m['mixername'], channels=channels, displayname=displayname)
             self.mixer_box.append(mc)
 
 
@@ -230,6 +302,119 @@ class CommandButton(Gtk.Button):
             log.error("Dialog error: %s" % e)
 
 
+class CustomButtonsGrid(Gtk.Grid):
+    def __init__(self, config, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.config = config
+        self.set_column_homogeneous(True)
+        self.set_row_homogeneous(True)
+        log.debug("buttons: %s" % self.config)
+        self.buttons = []
+        for button_config in self.config:
+            b = CommandButton(config=button_config)
+            self.buttons.append(b)
+            self.attach(b, button_config['geometry']['column'], button_config['geometry']['row'],
+                                    button_config['geometry']['width'], button_config['geometry']['height'])
+
+
+class StatsGrid(Gtk.Grid):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.set_column_homogeneous(True)
+        self.set_row_homogeneous(True)
+        self.set_name("stats-grid")
+        self.cpu_label = StatLabel("CPU", "")
+        self.mem_label = StatLabel("Mem", "")
+        self.temp_label = StatLabel("Temp", "")
+        self.samplerate_label = StatLabel("Rate", "")
+        self.bits_label = StatLabel("Bits", "")
+        self.buffer_label = StatLabel("Buffer", "")
+        self.attach(self.cpu_label, 0, 0, 1, 1)
+        self.attach(self.mem_label, 1, 0, 1, 1)
+        self.attach(self.temp_label, 2, 0, 1, 1)
+        self.attach(self.samplerate_label, 0, 1, 1, 1)
+        self.attach(self.bits_label, 1, 1, 1, 1)
+        self.attach(self.buffer_label, 2, 1, 1, 1)
+
+
+class StockButtonsGrid(Gtk.Grid):
+    def __init__(self, config:dict, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.config = config
+        self.mixer_running = False
+        self.set_column_homogeneous(True)
+        self.set_row_homogeneous(True)
+        self.set_name("stock-button-box")
+        self.mixer_button = Gtk.Button(label=constants.BUTTON_LABEL_MIXER)
+        self.mixer_button.set_name("stock-button")
+        self.mixer_button.set_hexpand(True)
+        self.mixer_button.connect("clicked", self.mixer_button_clicked)
+        self.restart_button = Gtk.Button(label=constants.BUTTON_LABEL_RESTART)
+        self.restart_button.set_name("stock-button")
+        self.restart_button.set_hexpand(True)
+        self.restart_button.connect("clicked", self.restart_button_clicked)
+        self.power_button = Gtk.Button(label=constants.BUTTON_LABEL_POWER)
+        self.power_button.set_name("stock-button")
+        self.power_button.set_hexpand(True)
+        self.power_button.connect("clicked", self.power_button_clicked)
+
+        self.attach(self.mixer_button, 0, 0, 2, 1)
+        self.attach(self.restart_button, 0, 1, 1, 1)
+        self.attach(self.power_button, 1, 1, 1, 1)
+
+    def power_button_clicked(self, button:Gtk.Button):
+        PowerDialog().choose(callback=self.power_dialog_response)
+
+    def power_dialog_response(self, dialog:Gtk.AlertDialog, async_result):
+        try:
+            res = dialog.choose_finish(async_result)
+            log.debug("Power response %s" % res)
+            if res == 1:
+                log.debug("Running '%s'" % self.config['commands']['reboot'])
+                for cmd in self.config['commands']['reboot']:
+                    if constants.EXEC_CMDS:
+                        subprocess.run(cmd, shell=True)
+            elif res == 2:
+                log.debug("Running '%s'" % self.config['commands']['poweroff'])
+                for cmd in self.config['commands']['poweroff']:
+                    if constants.EXEC_CMDS:
+                        subprocess.run(cmd, shell=True)
+        except Exception as e:
+            log.debug("Power operation failed %s" % e)
+
+    def restart_button_clicked(self, button:Gtk.Button):
+        RestartDialog().choose(callback=self.restart_dialog_response)
+
+    def restart_dialog_response(self, dialog:Gtk.AlertDialog, async_result):
+        try:
+            res = dialog.choose_finish(async_result)
+            log.debug("Restart response %s" % res)
+            if res == 1:
+                log.debug("Full restart")
+                for cmd in [*self.config['commands']['restart_service'], *self.config['commands']['restart_console']]:
+                    log.debug("Running '%s'" % cmd)
+                    if constants.EXEC_CMDS:
+                        subprocess.run(cmd, shell=True)
+            elif res == 2:
+                log.debug("Half restart")
+                for cmd in self.config['commands']['restart_service']:
+                    log.debug("Running '%s'" % cmd)
+                    if constants.EXEC_CMDS:
+                        subprocess.run(cmd, shell=True)
+            elif res == 3:
+                log.debug("Restarting UI")
+                for cmd in self.config['commands']['restart_console']:
+                    log.debug("Running '%s'" % cmd)
+                    if constants.EXEC_CMDS:
+                        subprocess.run(cmd, shell=True)
+        except Exception as e:
+            log.debug("Restart failed %s" % e)
+
+    def mixer_button_clicked(self, button:Gtk.Button):
+        log.debug("Mixer button clicked")
+        MixerWindow(config=self.config, parent=self.get_ancestor(Gtk.Window)).present()
+
+
 class PedalConsoleWindow(Gtk.ApplicationWindow):
     def __init__(self, config, css_file, audiodevice, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -273,61 +458,18 @@ class PedalConsoleWindow(Gtk.ApplicationWindow):
         self.center_box.set_name("center-box")
         self.main_box.append(self.center_box)
 
-        self.top_button_grid = Gtk.Grid()
-        self.top_button_grid.set_column_homogeneous(True)
-        self.top_button_grid.set_row_homogeneous(True)
-        self.center_box.append(self.top_button_grid)
-
-        log.debug("buttons: %s" % self.config['buttons'])
-        self.buttons = []
-        for button_config in self.config['buttons']:
-            b = CommandButton(config=button_config)
-            self.buttons.append(b)
-            self.top_button_grid.attach(b, button_config['geometry']['column'], button_config['geometry']['row'],
-                                    button_config['geometry']['width'], button_config['geometry']['height'])
+        self.custom_buttons_grid = CustomButtonsGrid(self.config['buttons'])
+        self.center_box.append(self.custom_buttons_grid)
 
         ## Middle spacer
-        #self.center_box.append(Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL))
         spacer_box = Gtk.Box()
         spacer_box.set_vexpand(True)
         self.center_box.append(spacer_box)
 
-        ## Stats grid
-        self.stats_grid = Gtk.Grid()
-        self.stats_grid.set_column_homogeneous(True)
-        self.stats_grid.set_row_homogeneous(True)
+        self.stats_grid = StatsGrid()
+        self.stock_buttons_grid = StockButtonsGrid(self.config)
         self.center_box.append(self.stats_grid)
-        self.cpu_label = StatLabel("CPU", "")
-        self.mem_label = StatLabel("Mem", "")
-        self.temp_label = StatLabel("Temp", "")
-        self.samplerate_label = StatLabel("Rate", "")
-        self.bits_label = StatLabel("Bits", "")
-        self.buffer_label = StatLabel("Buffer", "")
-        self.stats_grid.attach(self.cpu_label, 0, 0, 1, 1)
-        self.stats_grid.attach(self.mem_label, 1, 0, 1, 1)
-        self.stats_grid.attach(self.temp_label, 2, 0, 1, 1)
-        self.stats_grid.attach(self.samplerate_label, 0, 1, 1, 1)
-        self.stats_grid.attach(self.bits_label, 1, 1, 1, 1)
-        self.stats_grid.attach(self.buffer_label, 2, 1, 1, 1)
-
-        ## Stock buttons
-        self.stock_button_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
-        self.center_box.append(self.stock_button_box)
-        self.stock_button_box.set_name("stock-button-box")
-        self.stock_button_box.set_homogeneous(True)
-        self.restart_button = Gtk.Button(label=constants.BUTTON_LABEL_RESTART)
-        self.restart_button.set_name("stock-button")
-        self.restart_button.set_hexpand(True)
-        #self.restart_button.set_vexpand(False)
-        self.restart_button.connect("clicked", self.restart_button_clicked)
-        self.stock_button_box.append(self.restart_button)
-        self.power_button = Gtk.Button(label=constants.BUTTON_LABEL_POWER)
-        self.power_button.set_name("stock-button")
-        self.power_button.set_hexpand(True)
-        #self.power_button.set_vexpand(False)
-        self.power_button.connect("clicked", self.power_button_clicked)
-        self.stock_button_box.append(self.power_button)
-
+        self.center_box.append(self.stock_buttons_grid)
         self.main_box.append(self.input_box)
 
     def on_keypress(self, controller, keyval, keycode, state):
@@ -337,51 +479,3 @@ class PedalConsoleWindow(Gtk.ApplicationWindow):
         if keyval in (ord('q'), ord('Q')) and (ctrl_pressed or cmd_pressed):
             log.debug("QUIT pressed")
             self.close()
-
-    def power_button_clicked(self, button:Gtk.Button):
-        PowerDialog().choose(callback=self.power_dialog_response)
-
-    def power_dialog_response(self, dialog:Gtk.AlertDialog, async_result):
-        try:
-            res = dialog.choose_finish(async_result)
-            log.debug("Power response %s" % res)
-            if res == 1:
-                log.debug("Running '%s'" % self.config['commands']['reboot'])
-                for cmd in self.config['commands']['reboot']:
-                    if constants.EXEC_CMDS:
-                        subprocess.run(cmd, shell=True)
-            elif res == 2:
-                log.debug("Running '%s'" % self.config['commands']['poweroff'])
-                for cmd in self.config['commands']['poweroff']:
-                    if constants.EXEC_CMDS:
-                        subprocess.run(cmd, shell=True)
-        except Exception as e:
-            log.debug("Power op failed %s" % e)
-
-    def restart_button_clicked(self, button:Gtk.Button):
-        RestartDialog().choose(callback=self.restart_dialog_response)
-
-    def restart_dialog_response(self, dialog:Gtk.AlertDialog, async_result):
-        try:
-            res = dialog.choose_finish(async_result)
-            log.debug("Restart response %s" % res)
-            if res == 1:
-                log.debug("Full restart")
-                for cmd in [*self.config['commands']['restart_service'], *self.config['commands']['restart_console']]:
-                    log.debug("Running '%s'" % cmd)
-                    if constants.EXEC_CMDS:
-                        subprocess.run(cmd, shell=True)
-            elif res == 2:
-                log.debug("Half restart")
-                for cmd in self.config['commands']['restart_service']:
-                    log.debug("Running '%s'" % cmd)
-                    if constants.EXEC_CMDS:
-                        subprocess.run(cmd, shell=True)
-            elif res == 3:
-                log.debug("Restarting UI")
-                for cmd in self.config['commands']['restart_console']:
-                    log.debug("Running '%s'" % cmd)
-                    if constants.EXEC_CMDS:
-                        subprocess.run(cmd, shell=True)
-        except Exception as e:
-            log.debug("Restart failed %s" % e)
