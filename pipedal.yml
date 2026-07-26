@@ -18,18 +18,14 @@ console:
     device: Zero
     input:
       - mixername: ADC
-        mute_enable: true
       - mixername: Aux
         displayname: IN
         channels: 2
-        mute_enable: true
     output:
       - mixername: Headphone
         displayname: OUT
         channels: 2
-        mute_enable: true
       - mixername: DAC
-        mute_enable: true
   buttons:
     - label: PiPedal
       commands:

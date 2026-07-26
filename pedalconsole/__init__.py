@@ -22,7 +22,6 @@ def signal_exit(sig, frame):
     log.debug("caught signal %s, exiting" % signal.Signals(sig).name)
     sys.exit(0)
 
-
 def main():
     log.debug("starting pedalconsole")
     for k in sorted(os.environ.keys()):

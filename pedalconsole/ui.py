@@ -6,7 +6,7 @@ import alsaaudio
 from collections.abc import Callable
 import gi
 gi.require_version("Gtk", "4.0")
-from gi.repository import Gtk, Gdk
+from gi.repository import Gtk, Gdk, Gio
 
 log = logging.getLogger(__name__)
 
@@ -54,7 +54,6 @@ class MixerWindow(Gtk.Window):
         self.key_event_controller.connect('key-pressed', self.on_keypress)
         self.add_controller(self.key_event_controller)
 
-
     def on_keypress(self, controller:Gtk.EventControllerKey, keyval:int, keycode:int, state:Gdk.ModifierType):
         #log.debug("keypressed: %s %s %s" % (keyval, keycode, state))
         ctrl_pressed = state & Gdk.ModifierType.CONTROL_MASK
@@ -66,7 +65,6 @@ class MixerWindow(Gtk.Window):
     def on_close_click(self, button:Gtk.Button):
         log.debug("MixerWindow closing")
         self.close()
-
 
 class MuteButton(Gtk.Button):
     def __init__(self, audiodevice:alsa.AudioDevice, mixerdevice:alsaaudio.Mixer, on_click:Callable, *args, **kwargs):
@@ -102,7 +100,6 @@ class MuteButton(Gtk.Button):
             self.remove_css_class("unmuted")
             self.add_css_class("muted")
 
-
 class RestartDialog(Gtk.AlertDialog):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -111,7 +108,6 @@ class RestartDialog(Gtk.AlertDialog):
         self.set_detail(constants.DIALOG_DETAIL_FMT % "FULL = all services and UI restarted\nSERVICE = services only\nAPP = UI/App only")
         self.set_buttons(["NO", "FULL", "SERVICE", "APP"])
 
-
 class PowerDialog(Gtk.AlertDialog):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -119,7 +115,6 @@ class PowerDialog(Gtk.AlertDialog):
         self.set_message(constants.DIALOG_MESSAGE_FMT % "Reboot or Power off?")
         self.set_detail(constants.DIALOG_DETAIL_FMT % "Restart or turn off device")
         self.set_buttons(["NO", "REBOOT", "POWER OFF"])
-
 
 class StatLabel(Gtk.Label):
     def __init__(self, stat:str, value:str, *args, **kwargs):
@@ -131,7 +126,6 @@ class StatLabel(Gtk.Label):
 
     def set_value(self, value):
         self.set_markup(constants.STATLABEL_FMT % (value, self.stat))
-
 
 class MixerSlider(Gtk.Scale):
     def __init__(self, audiodevice:alsa.AudioDevice, mixerdevice:alsaaudio.Mixer, channel:int|None, on_value_changed:Callable, *args, **kwargs):
@@ -149,7 +143,6 @@ class MixerSlider(Gtk.Scale):
         self.add_mark(100, Gtk.PositionType.RIGHT, "")
         self.set_value(self.audiodevice.get_volume_percent(self.mixerdevice)[channel if channel is not None else 0])
         self.connect('value-changed', on_value_changed)
-
 
 class MixerControl(Gtk.Box):
     def __init__(self, audiodevice:alsa.AudioDevice, mixername:str, channels:int|None, displayname:str|None=None, *args, **kwargs):
@@ -170,8 +163,10 @@ class MixerControl(Gtk.Box):
         self.name_label.set_wrap(True)
         self.append(self.name_label)
 
-
-        if len(self.mixerdevice.volumecap()) > 0:
+        volume_cap = self.mixerdevice.volumecap()
+        enum_controls = self.mixerdevice.getenum()
+        if len(volume_cap) > 0:
+            ## Add volume slider if capabilities exist
             self.sliders_grid = Gtk.Grid()
             self.sliders_grid.set_name("mixer-sliders-grid")
             self.sliders_grid.set_halign(Gtk.Align.CENTER)
@@ -183,12 +178,29 @@ class MixerControl(Gtk.Box):
             else:
                 for c in range(channels):
                     self.setup_slider(channel=c)
+        elif len(enum_controls) > 0:
+            ## Add enumerated control if capability exists
+            log.debug("Enum for mixer '%s': %s" % (self.mixername, enum_controls))
+            self.enum_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+            self.enum_box.set_vexpand(True)
+            self.append(self.enum_box)
+            selected_item = None
+            for i in range(len(enum_controls[1])):
+                if enum_controls[0] == enum_controls[1][i]:
+                    selected_item = i
+                    break
+            self.enum_dropdown = Gtk.DropDown.new_from_strings(enum_controls[1])
+            self.enum_dropdown.set_name("mixer-enum-dropdown")
+            self.enum_dropdown.set_selected(selected_item)
+            self.enum_box.append(self.enum_dropdown)
+            self.enum_dropdown.connect("notify::selected", self.on_enum_selected)
         else:
             spacer_box = Gtk.Box()
             spacer_box.set_vexpand(True)
             self.append(spacer_box)
 
         if len(self.mixerdevice.switchcap()) > 0:
+            ## Add mute button if capability exists
             self.mute_button = MuteButton(audiodevice=self.audiodevice, mixerdevice=self.mixerdevice, on_click=self.on_mute_button_clicked)
             self.append(self.mute_button)
 
@@ -207,7 +219,6 @@ class MixerControl(Gtk.Box):
         self.sliders.append(slider)
         self.sliders_grid.attach(slider, column, 1, 1, 1)
 
-
     def on_mute_button_clicked(self, button:Gtk.Button):
         log.debug("Mute button clicked for mixer '%s'" % self.mixername)
         button.toggle_mute()
@@ -223,9 +234,13 @@ class MixerControl(Gtk.Box):
             vol_markup = "off"
         self.level_labels[scale.channel if scale.channel is not None else 0].set_markup(vol_markup)
 
+    def on_enum_selected(self, dropdown, pspec):
+        selected = dropdown.get_selected()
+        log.debug("enum selected: %d" % selected)
+        self.mixerdevice.setenum(selected)
 
 class MixerSideBox(Gtk.Box):
-    def __init__(self, config:dict, label_markup:str, audiodevice, *args, **kwargs):
+    def __init__(self, config:dict, label_markup:str, audiodevice:alsa.AudioDevice, *args, **kwargs):
         super().__init__(orientation=Gtk.Orientation.VERTICAL, *args, **kwargs)
         log.debug("Mixer side box config: %s" % config)
         self.config = config
@@ -255,9 +270,8 @@ class MixerSideBox(Gtk.Box):
             mc = MixerControl(audiodevice=self.audiodevice, mixername=m['mixername'], channels=channels, displayname=displayname)
             self.mixer_box.append(mc)
 
-
 class CommandButton(Gtk.Button):
-    def __init__(self, config, *args, **kwargs):
+    def __init__(self, config:dict, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.set_name("command-button")
         self.config = config
@@ -292,7 +306,7 @@ class CommandButton(Gtk.Button):
         dialog.set_buttons(["NO", "YES"])
         dialog.choose(parent=self.get_ancestor(Gtk.Window), callback=self.warning_response)
 
-    def warning_response(self, dialog, async_result):
+    def warning_response(self, dialog:Gtk.AlertDialog, async_result:Gio.AsyncResult):
         try:
             res = dialog.choose_finish(async_result)
             log.debug("dialog response %s" % res)
@@ -301,9 +315,8 @@ class CommandButton(Gtk.Button):
         except Exception as e:
             log.error("Dialog error: %s" % e)
 
-
 class CustomButtonsGrid(Gtk.Grid):
-    def __init__(self, config, *args, **kwargs):
+    def __init__(self, config:dict, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.config = config
         self.set_column_homogeneous(True)
@@ -315,7 +328,6 @@ class CustomButtonsGrid(Gtk.Grid):
             self.buttons.append(b)
             self.attach(b, button_config['geometry']['column'], button_config['geometry']['row'],
                                     button_config['geometry']['width'], button_config['geometry']['height'])
-
 
 class StatsGrid(Gtk.Grid):
     def __init__(self, *args, **kwargs):
@@ -335,7 +347,6 @@ class StatsGrid(Gtk.Grid):
         self.attach(self.samplerate_label, 0, 1, 1, 1)
         self.attach(self.bits_label, 1, 1, 1, 1)
         self.attach(self.buffer_label, 2, 1, 1, 1)
-
 
 class StockButtonsGrid(Gtk.Grid):
     def __init__(self, config:dict, *args, **kwargs):
@@ -414,9 +425,8 @@ class StockButtonsGrid(Gtk.Grid):
         log.debug("Mixer button clicked")
         MixerWindow(config=self.config, parent=self.get_ancestor(Gtk.Window)).present()
 
-
 class PedalConsoleWindow(Gtk.ApplicationWindow):
-    def __init__(self, config, css_file, audiodevice, *args, **kwargs):
+    def __init__(self, config:dict, css_file:str, audiodevice:alsa.AudioDevice, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.app = application
         self.config = config
@@ -467,12 +477,12 @@ class PedalConsoleWindow(Gtk.ApplicationWindow):
         self.center_box.append(spacer_box)
 
         self.stats_grid = StatsGrid()
-        self.stock_buttons_grid = StockButtonsGrid(self.config)
+        self.stock_buttons_grid = StockButtonsGrid(config=self.config)
         self.center_box.append(self.stats_grid)
         self.center_box.append(self.stock_buttons_grid)
         self.main_box.append(self.input_box)
 
-    def on_keypress(self, controller, keyval, keycode, state):
+    def on_keypress(self, controller:Gtk.EventControllerKey, keyval:int, keycode:int, state:Gdk.ModifierType):
         #log.debug("keypressed: %s %s %s" % (keyval, keycode, state))
         ctrl_pressed = state & Gdk.ModifierType.CONTROL_MASK
         cmd_pressed = state & Gdk.ModifierType.META_MASK

@@ -10,8 +10,9 @@ from gi.repository import Gtk, GLib
 
 log = logging.getLogger(__name__)
 
+
 class StatsUpdater:
-    def __init__(self, window, config):
+    def __init__(self, window:Gtk.Window, config:dict):
         self.window = window
         self.config = config
         try:
@@ -65,10 +66,8 @@ class StatsUpdater:
                     log.error("Failed to open alsa proc file: %s" % e)
             time.sleep(constants.STATS_UPDATE_INTERVAL)
 
-
-
 class PedalConsoleApp(Gtk.Application):
-    def __init__(self, config, css_file, *args, **kwargs):
+    def __init__(self, config:dict, css_file:str, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.config = config
         self.css_file = css_file
@@ -91,4 +90,4 @@ class PedalConsoleApp(Gtk.Application):
             log.fatal("Failed to start statsupdater: %s" % e)
             sys.exit(1)
         self.window.present()
-        #ui.MixerWindow(self.config).present()
+        #ui.MixerWindow(config=self.config, parent=self.window).present()

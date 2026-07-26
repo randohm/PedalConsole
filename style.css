@@ -72,6 +72,7 @@ window {
     background-color: lightblue;
 }
 
+
 #mute-button {
     padding: 2px;
     margin: 10px;
@@ -82,7 +83,6 @@ window {
     border-radius: 0px;
     color: black;
 }
-
 .muted {
     background: red;
 }
@@ -127,4 +127,9 @@ window {
     border-color: gray;
     border-radius: 20px;
     background: lightgray;
+}
+
+#mixer-enum-dropdown listview {
+    font-size: 16pt;
+    font-weight: bold;
 }
