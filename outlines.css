@@ -1,0 +1,79 @@
+window {
+    font-size: 20px;
+    font-family: Verdana;
+    font-weight: bolder;
+    background-color: lightgray;
+}
+
+box {
+    padding: 1px;
+    margin: 1px;
+    border-style: solid;
+    border-width: 1px;
+    border-color: red;
+}
+
+label {
+    padding: 1px;
+    margin: 1px;
+    border-style: solid;
+    border-width: 1px;
+    border-color: blue;
+}
+
+scale {
+    border-style: solid;
+    border-width: 1px;
+    border-color: yellow;
+}
+
+scale trough {
+    background-color: yellow;
+}
+
+scale highlight {
+    background-color: sandybrown;
+}
+
+scale slider {
+    min-width: 20px;
+    min-height: 20px;
+    border-radius: 3px;
+}
+
+separator {
+    padding: 4px;
+    margin: 4px;
+    border-style: solid;
+    border-width: 1px;
+    border-color: rebeccapurple;
+}
+
+grid {
+    padding: 0px;
+    margin: 0px;
+    border-style: solid;
+    border-width: 1px;
+    border-color: green;
+}
+
+button {
+    padding: 5px;
+    margin: 5px;
+    border-style: solid;
+    border-width: 1px;
+    border-color: black;
+    border-radius: 20px;
+}
+
+levelbar block.filled.low {
+    background-color: green;
+}
+
+levelbar block.filled.high {
+    background-color: yellow;
+}
+
+levelbar block.filled.full {
+    background-color: red;
+}

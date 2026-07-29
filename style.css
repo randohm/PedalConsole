@@ -1,0 +1,135 @@
+window {
+    padding: 0px;
+    margin: 0px;
+    color: white;
+    font-size: 18pt;
+    font-family: Verdana;
+    font-weight: bolder;
+    background: linear-gradient(black, #101040);
+}
+
+#main-box {
+    padding: 0px;
+    margin: 0px;
+}
+
+#center-box {
+    padding: 0px;
+    margin: 0px;
+}
+
+#side-box {
+    padding: 0px;
+    margin: 0px;
+}
+
+#mixer-box {
+    padding: 0px;
+    margin: 0px;
+}
+
+#side-label {
+    padding: 10px;
+    margin: 0px;
+    border-width: 0px;
+    color: black;
+    background: lightcyan;
+}
+
+#mixer-control {
+    padding: 0px;
+    margin: 0px;
+    border-style: solid;
+    border-width: 1px;
+    border-color: lightgray;
+}
+
+#mixer-name-label {
+    padding: 2px;
+    margin: 5px;
+}
+
+#volume-label {
+    font-size: 16pt;
+}
+
+#mixer-slider {
+    padding: 10px 40px 20px 40px;
+    margin: 0px;
+}
+
+#mixer-slider slider {
+    min-width: 30px;
+    min-height: 20px;
+    border-radius: 5px;
+}
+
+#mixer-slider trough {
+    background-color: slategray;
+}
+
+#mixer-slider highlight {
+    background-color: lightblue;
+}
+
+
+#mute-button {
+    padding: 2px;
+    margin: 10px;
+    font-size: 16pt;
+    border-style: solid;
+    border-width: 0px;
+    border-color: black;
+    border-radius: 0px;
+    color: black;
+}
+.muted {
+    background: red;
+}
+
+.unmuted {
+    background: mediumseagreen;
+}
+
+#command-button {
+    padding: 10px;
+    margin: 10px;
+    border-style: solid;
+    border-width: 1px;
+    border-color: gray;
+    border-radius: 20px;
+    background: lightgray;
+}
+
+#stat-label {
+    padding: 10px;
+    margin: 0px;
+    border-style: solid;
+    border-width: 1px;
+    border-color: lightgray;
+}
+
+#stock-button {
+    padding: 10px;
+    margin: 10px;
+    border-style: solid;
+    border-width: 1px;
+    border-color: gray;
+    border-radius: 20px;
+    background: lightgray;
+}
+
+* button {
+    padding: 5px;
+    margin: 5px;
+    border-style: solid;
+    border-width: 1px;
+    border-color: gray;
+    border-radius: 20px;
+    background: lightgray;
+}
+
+#mixer-enum-dropdown listview {
+    font-size: 16pt;
+    font-weight: bold;
+}

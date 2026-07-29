@@ -1,0 +1,4 @@
+pygobject
+pyyaml
+psutil
+collections
