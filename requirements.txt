@@ -1,4 +1,6 @@
 pygobject
 pyyaml
 psutil
-collections
+websockets
+mido[ports-rtmidi]
+requests
