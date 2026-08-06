@@ -1,5 +1,4 @@
-import re
-import sys, time
+import sys, time, re
 import logging
 import psutil
 import threading
@@ -26,6 +25,8 @@ class StatsUpdater:
         while not self.window.is_active():
             time.sleep(0.1)
         while True:
+            if hasattr(self.window, 'clock'):
+                GLib.idle_add(self.window.clock.update)
             cpu_usage = psutil.cpu_percent(interval=constants.STATS_UPDATE_INTERVAL)
             #log.debug("CPU usage: %s" % cpu_usage)
             GLib.idle_add(self.window.stats_grid.cpu_label.set_value, "%-03.1f%%" % cpu_usage)

@@ -133,3 +133,7 @@ window {
     font-size: 16pt;
     font-weight: bold;
 }
+
+#clock {
+    font-size: 80pt;
+}
