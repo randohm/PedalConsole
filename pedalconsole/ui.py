@@ -1,4 +1,4 @@
-import os
+import os, datetime
 import subprocess
 import logging
 from . import constants, application, alsa
@@ -10,6 +10,18 @@ from gi.repository import Gtk, Gdk, Gio
 
 log = logging.getLogger(__name__)
 
+class ClockLabel(Gtk.Label):
+    def __init__(self, show_seconds:bool=False,  *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        self.show_seconds = show_seconds
+        self.update()
+
+    def update(self):
+        now = datetime.datetime.now()
+        now_string = "%02d:%02d" % (now.hour, now.minute)
+        if self.show_seconds:
+            now_string += ":%02d" % now.second
+        self.set_text(now_string)
 
 class MixerWindow(Gtk.Window):
     def __init__(self, config:dict, *args, **kwargs):
@@ -470,6 +482,14 @@ class PedalConsoleWindow(Gtk.ApplicationWindow):
 
         self.custom_buttons_grid = CustomButtonsGrid(self.config['buttons'])
         self.center_box.append(self.custom_buttons_grid)
+
+        if 'clock' in self.config and 'enable' in self.config['clock'] and self.config['clock']['enable']:
+            show_seconds = False
+            if 'show_seconds' in self.config['clock'] and self.config['clock']['show_seconds']:
+                show_seconds = True
+            self.clock = ClockLabel(show_seconds=show_seconds)
+            self.clock.set_name("clock")
+            self.center_box.append(self.clock)
 
         ## Middle spacer
         spacer_box = Gtk.Box()

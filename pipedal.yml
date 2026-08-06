@@ -45,6 +45,9 @@ console:
         row: 0
         width: 1
         height: 2
+  clock:
+    enable: true
+    show_seconds: false
 
 midibridge:
   - remote_type: websocket
