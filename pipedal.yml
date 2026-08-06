@@ -45,3 +45,54 @@ console:
         row: 0
         width: 1
         height: 2
+
+midibridge:
+  - remote_type: websocket
+    url: ws://rpi5-1/pipedal
+    command_fmt: '[{"message":"loadPluginPreset"},{"pluginInstanceId":%d,"presetInstanceId":%d}]'
+    presets:
+      - channel: 10
+        cc: 100
+        cc_value: 0
+        params:
+          - 2
+          - 7
+      - channel: 10
+        cc: 100
+        cc_value: 1
+        params:
+          - 2
+          - 9
+      - channel: 10
+        cc: 100
+        cc_value: 2
+        params:
+          - 2
+          - 1
+      - channel: 10
+        cc: 100
+        cc_value: 3
+        params:
+          - 2
+          - 3
+      - channel: 10
+        cc: 100
+        cc_value: 4
+        params:
+          - 2
+          - 5
+
+  - remote_type: http
+    url: http://rpi5-1
+    command_fmt: "/func?foo=%s&bar=%s"
+    presets:
+      - channel: 10
+        pc: 56
+        params:
+          - 3
+          - 5
+      - channel: 10
+        pc: 32
+        params:
+          - 32
+          - 51

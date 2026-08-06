@@ -4,6 +4,7 @@ import logging
 import signal
 import yaml
 from .application import PedalConsoleApp
+from .midibridge import MidiBridge
 import gi
 gi.require_version("Gtk", "4.0")
 from gi.repository import Gtk, Gdk, Gio
@@ -11,7 +12,7 @@ from gi.repository import Gtk, Gdk, Gio
 from . import constants, application, ui
 
 log = logging.getLogger(__name__)
-log.setLevel(logging.DEBUG)
+log.setLevel(logging.ERROR)
 formatter = logging.Formatter(constants.LOG_FORMAT)
 handler = logging.StreamHandler(sys.stdout)
 handler.setFormatter(formatter)
@@ -36,9 +37,12 @@ def main():
     arg_parser.add_argument("-s", "--css", action='store', help="CSS file", required=True)
     parsed_args = arg_parser.parse_args()
 
-    config = yaml.safe_load(open(parsed_args.config))
-    log.debug("config: %s", config)
+    if parsed_args.verbose:
+        log.setLevel(logging.DEBUG)
 
+    config = yaml.safe_load(open(parsed_args.config))
+    if 'midibridge' in config:
+        mbridge = MidiBridge(config['midibridge'])
     if not 'console' in config:
         log.fatal("Missing 'console' section in config")
         return 1
