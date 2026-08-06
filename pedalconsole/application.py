@@ -1,4 +1,4 @@
-import sys, time, re, datetime
+import sys, time, re
 import logging
 import psutil
 import threading
